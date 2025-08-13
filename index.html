@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<head>
+<meta name="referrer" content="no-referrer">
+</head>
+
+<body>
+<style>
+  #geo-loader {
+    position: fixed; inset: 0; background: #fff;
+    display: flex; justify-content: center; align-items: center;
+    font: 16px/1.4 Arial, sans-serif; color: #444; z-index: 999999;
+  }
+  #geo-loader .spinner {
+    border: 3px solid #f3f3f3; border-top: 3px solid #3498db;
+    border-radius: 50%; width: 28px; height: 28px;
+    animation: spin 0.7s linear infinite; margin-right: 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<div id="geo-loader"><div class="spinner"></div> Перенаправляем…</div>
+
+<script>
+(function () {
+  // --------- настройки ---------
+  const SPECIAL = new Set(["GB","UK","DE","NL","IT","BE","CZ","RO","SK"]);
+  const LINK_SPECIAL = "https://example1.com/";       // 🔁 подставь свою ссылку
+  const LINK_DEFAULT = "https://defaultlink.com/";    // 🔁 подставь свою ссылку
+  const PER_REQ_TIMEOUT = 1200;                       // тайм-аут на одного провайдера, мс
+  const CACHE_KEY = "geo_cc_cache_v1";                // кеш в пределах сессии
+
+  // --------- утилиты ---------
+  function removeLoader() {
+    const el = document.getElementById("geo-loader");
+    if (el) el.remove();
+  }
+
+  // Надёжный редирект без Referer (дополнительно к meta no-referrer)
+  function redirectNoReferrer(url) {
+    try {
+      // на всякий случай уберём лоадер перед уходом
+      removeLoader();
+      // ссылка с rel="noreferrer" и referrerpolicy
+      const a = document.createElement("a");
+      a.href = url;
+      a.rel = "noreferrer";
+      a.referrerPolicy = "no-referrer";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      // fallback, если вдруг клик заблокирован:
+      setTimeout(() => { location.replace(url); }, 50);
+    } catch {
+      location.replace(url);
+    }
+  }
+
+  function fetchWithTimeout(url, ms, controller) {
+    const t = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { mode: "cors", signal: controller.signal })
+      .finally(() => clearTimeout(t));
+  }
+
+  async function getCountryFast() {
+    // 1) кеш на сессию — моментальный редирект на повторах
+    try {
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      if (cached) return cached.toUpperCase();
+    } catch {}
+
+    // 2) параллельные провайдеры с отменой проигравших
+    const ctrls = [new AbortController(), new AbortController(), new AbortController(), new AbortController()];
+    const tasks = [
+      fetchWithTimeout("https://ipinfo.io/json", PER_REQ_TIMEOUT, ctrls[0])
+        .then(r => r.json()).then(j => j && j.country),
+      fetchWithTimeout("https://ipapi.co/json/", PER_REQ_TIMEOUT, ctrls[1])
+        .then(r => r.json()).then(j => j && j.country_code),
+      fetchWithTimeout("https://ipwho.is/", PER_REQ_TIMEOUT, ctrls[2])
+        .then(r => r.json()).then(j => j && j.country_code),
+      fetchWithTimeout("https://get.geojs.io/v1/ip/country.json", PER_REQ_TIMEOUT, ctrls[3])
+        .then(r => r.json()).then(j => j && (j.country || j.country_code)),
+    ];
+
+    let winner = null, resolved = false;
+
+    await Promise.any(tasks.map(p => p.then(cc => {
+      if (resolved || !cc) return Promise.reject();
+      winner = String(cc).toUpperCase();
+      resolved = true;
+      return winner;
+    })) ).catch(() => {});
+
+    // обрываем проигравшие запросы (экономим трафик/время)
+    ctrls.forEach(c => { try { c.abort(); } catch {} });
+
+    if (winner) {
+      // нормализуем UK → GB
+      if (winner === "UK") winner = "GB";
+      try { sessionStorage.setItem(CACHE_KEY, winner); } catch {}
+    }
+
+    return winner; // может быть null, если все упали/тайм-ауты
+  }
+
+  // --------- запуск ---------
+  document.addEventListener("DOMContentLoaded", async () => {
+    let cc = null;
+    try {
+      cc = await getCountryFast();
+    } catch {}
+
+    // если никто не ответил — идём на дефолт
+    const target = (cc && SPECIAL.has(cc)) ? LINK_SPECIAL : LINK_DEFAULT;
+    redirectNoReferrer(target);
+  });
+})();
+</script>
+</body>
